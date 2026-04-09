@@ -7,6 +7,8 @@ import requests
 import urllib.parse
 from datetime import datetime
 import re
+import sys
+import fcntl
 
 # ==========================================
 # KONFIGURASI WHATSAPP (FONNTE API)
@@ -90,6 +92,16 @@ def send_whatsapp(message):
 
 def main():
     print("Memulai Internet Monitoring...")
+    
+    # 📌 PENCEGAH DOUBLE SCRIPT (Mencegah Notifikasi WA Ganda)
+    lock_file = open('.monitor.lock', 'w')
+    try:
+        fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        print("⚠️ PERINGATAN: Menutup script ini karena monitoring sudah TEREKSEKUSI di layar lain atau background service (systemd).")
+        print("Ini untuk mencegah spam notifikasi WhatsApp ganda!")
+        sys.exit(1)
+
     print(f"File log: {LOG_FILE}")
     print(f"Peringatan WA Aktif: {WA_INTERVAL_MINUTES} Menit Sekali.")
     print("-" * 50)
@@ -165,8 +177,13 @@ def main():
 
         minutes_passed += 1
         
-        # Wait until next minute (karena ping sudah memakan waktu 55 detik, sisanya 5 detik)
-        time.sleep(5)
+        # --- HITUNG SISA WAKTU AGAR PENGECEKAN TEPAT 1 MENIT (60 DETIK) ---
+        elapsed = time.time() - start_time - uptime_sec 
+        # uptime_sec is relative to string formatting earlier, let's just create an absolute diff
+        
+        # We know we want the next cycle to be roughly uptime_sec + 60
+        sleep_amount = max(0, 60 - (time.time() - (start_time + uptime_sec)))
+        time.sleep(sleep_amount)
 
 if __name__ == "__main__":
     main()
