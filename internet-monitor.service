@@ -1,0 +1,20 @@
+[Unit]
+Description=Internet Monitoring & WhatsApp Alert Service
+After=network.target
+
+[Service]
+Type=simple
+# [PENTING] GANTI "User" DI BAWAH INI SESUAI DENGAN USERNAME DI PC TARGET. JIKA MENGGUNAKAN ROOT, BIARKAN ROOT.
+User=root
+
+# [PENTING] GANTI PATH DI BAWAH INI SESUAI LOKASI DI MANA ANDA MENARUH FOLDER INI DI PC TARGET (contoh: /opt/kuota-monitoring) 
+WorkingDirectory=/opt/kuota-monitoring
+
+# [PENTING] GANTI JUGA PATH EKSEKUSI DI BAWAH INI SESUAI LOKASI FOLDER.
+ExecStart=/opt/kuota-monitoring/venv/bin/python '/opt/kuota-monitoring/monitor_internet.py'
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
