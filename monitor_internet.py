@@ -6,6 +6,7 @@ import csv
 import requests
 import urllib.parse
 from datetime import datetime
+import re
 
 # ==========================================
 # KONFIGURASI WHATSAPP (FONNTE API)
@@ -19,31 +20,41 @@ SPEEDTEST_INTERVAL_MINUTES = 30 # Jalankan speedtest setiap 30 menit untuk test 
 WA_INTERVAL_MINUTES = 60        # Kirim laporan ke WhatsApp setiap 1 jam
 
 def get_ping():
+    loss = "0%"
+    avg_ping = "N/A"
     try:
-        # Pengecekan ping berkelanjutan selama 55 detik (55 paket)
-        output = subprocess.check_output(['ping', '-c', '55', '-q', '8.8.8.8'], stderr=subprocess.STDOUT, universal_newlines=True)
-        loss = "0%"
-        avg_ping = "N/A"
-        for line in output.split('\n'):
-            if 'packet loss' in line:
-                loss = line.split('received, ')[1].split(' packet loss')[0]
+        # Menjalankan ping tanpa '-q' agar output per baris tersedia
+        process = subprocess.Popen(['ping', '-c', '55', '8.8.8.8'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        
+        output_lines = []
+        # Menulis log ping dengan timestamp ke internet_log.txt
+        with open("internet_log.txt", "a", encoding="utf-8") as log_file:
+            for line in process.stdout:
+                line_clean = line.strip()
+                if line_clean:
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(f"[{timestamp}] {line_clean}\n")
+                    log_file.flush() # Memastikan log langsung masuk disk per detik
+                output_lines.append(line_clean)
+                
+        process.wait()
+        
+        # Jika ping exit code bukan 0 (berarti ada error atau packet loss), kita set fallback ke 100% loss.
+        # Nanti nilai ini akan tertimpa oleh pembacaan regex jika memang output summary-nya masih ada.
+        if process.returncode != 0:
+            loss = "100%"
+            avg_ping = "Failed"
+            
+        for line in output_lines:
+            loss_match = re.search(r'([\d\.]+)%\s+packet\s+loss', line)
+            if loss_match:
+                loss = loss_match.group(1) + "%"
             if line.startswith('rtt min/avg/max/mdev'):
                 avg_ping = line.split('= ')[1].split('/')[1] + " ms"
+                
         return avg_ping, loss
-    except subprocess.CalledProcessError as e:
-        # Menangani packet loss berat atau disconnect (ping exit code 1)
-        loss = "100%"
-        for line in e.output.split('\n'):
-            if 'packet loss' in line:
-                try:
-                    loss = line.split('received, ')[1].split(' packet loss')[0]
-                except:
-                    pass
-        return "Failed", loss
     except Exception as e:
         return "Failed", "100%"
-
-
 
 def get_speedtest():
     try:
@@ -110,10 +121,10 @@ def main():
 
         # Bandwidth Calc
         curr_io = psutil.net_io_counters()
-        dl_min = (curr_io.bytes_recv - last_io.bytes_recv) / 1_000_000
-        ul_min = (curr_io.bytes_sent - last_io.bytes_sent) / 1_000_000
-        dl_total = (curr_io.bytes_recv - start_io.bytes_recv) / 1_000_000
-        ul_total = (curr_io.bytes_sent - start_io.bytes_sent) / 1_000_000
+        dl_min = max(0.0, (curr_io.bytes_recv - last_io.bytes_recv) / 1_000_000)
+        ul_min = max(0.0, (curr_io.bytes_sent - last_io.bytes_sent) / 1_000_000)
+        dl_total = max(0.0, (curr_io.bytes_recv - start_io.bytes_recv) / 1_000_000)
+        ul_total = max(0.0, (curr_io.bytes_sent - start_io.bytes_sent) / 1_000_000)
         last_io = curr_io
 
         # Speedtest
@@ -147,6 +158,10 @@ def main():
                 msg += f"\n🚀 *SPEEDTEST (Asli)*\n⬇️ {spd_dl}\n⬆️ {spd_ul}"
                 
             send_whatsapp(msg)
+            
+            # Reset tracker bandwidth setiap 1 jam, sehingga "Total DL 1 Jam" akurat untuk 1 jam ke depan
+            if minutes_passed > 0:
+                start_io = curr_io
 
         minutes_passed += 1
         

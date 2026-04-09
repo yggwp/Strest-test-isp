@@ -3,10 +3,15 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "=== Instalasi Background Service Ubuntu ==="
 echo "Mendeteksi lokasi folder saat ini di: $DIR"
+
+SCRIPT_OWNER=$(stat -c '%U' "$DIR/setup_service.sh")
+echo "Mengeset user service menjadi: $SCRIPT_OWNER agar terhindar dari isu hak akses file log..."
+
 echo "Mengupdate file service secara otomatis agar selaras dengan lokasi direktori..."
 
-sed -i "s|WorkingDirectory=.*|WorkingDirectory=$DIR|g" "$DIR/internet-monitor.service"
-sed -i "s|ExecStart=.*|ExecStart=$DIR/venv/bin/python '$DIR/monitor_internet.py'|g" "$DIR/internet-monitor.service"
+sed -i "s|^User=.*|User=$SCRIPT_OWNER|g" "$DIR/internet-monitor.service"
+sed -i "s|^WorkingDirectory=.*|WorkingDirectory=$DIR|g" "$DIR/internet-monitor.service"
+sed -i "s|^ExecStart=.*|ExecStart=$DIR/venv/bin/python '$DIR/monitor_internet.py'|g" "$DIR/internet-monitor.service"
 
 echo ""
 echo "Melakukan copy service..."
